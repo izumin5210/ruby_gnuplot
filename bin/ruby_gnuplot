@@ -1,0 +1,279 @@
+#!/usr/bin/env ruby
+
+# Graphs input columns of numbers
+# New columns of numbers can follow and they will all be aggregated but they must be
+# separated by a commented line that is the graph's name
+# ```
+# # Graph Line 1
+# ...
+# # Graph Line 2
+# ...
+# ```
+
+require 'gnuplot'
+
+module IntegerRefinement
+  refine Integer do
+    def to_hex
+      case self
+      when 10
+        return 'A'
+      when 11
+        return 'B'
+      when 12
+        return 'C'
+      when 13
+        return 'D'
+      when 14
+        return 'E'
+      when 15
+        return 'F'
+      else
+        if self > 15
+          return 'F'
+        else
+          return to_s
+        end
+      end
+    end
+  end
+end
+
+using IntegerRefinement
+
+def random_color
+  @r ||= Random.new(111)
+  "rgb \"##{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}\""
+end
+
+def for_every_line_of_input
+  STDIN.each do |line|
+    line.strip!
+    next if line.match(/^\s*$/)
+
+    yield line
+  end
+end
+
+def for_every_ssv_entry
+  line_name = ""
+  for_every_line_of_input do |line|
+    if line.match(/^\s*#\s*(.*)\s*$/)
+      line_name = $1
+
+      next
+    end
+
+    yield line_name, line.split(/\s+/)
+  end
+end
+
+PlotData = Struct.new(:x, :y, :delta_y)
+
+def parse_plot_data
+  lines = {}
+  for_every_ssv_entry do |line_name, ssv_entry|
+    lines[line_name] ||= []
+
+    lines[line_name] << PlotData.new(*ssv_entry)
+
+    lines[line_name].last.delta_y ||= 0
+  end
+  lines
+end
+
+ORDINAL_DATA_TYPE = 'ordinal'
+DEFAULT_DATA_TYPE = ORDINAL_DATA_TYPE
+CATEGORICAL_DATA_TYPE = 'categorical'
+
+DATA_TYPE_OPTIONS = [
+  ORDINAL_DATA_TYPE,
+  CATEGORICAL_DATA_TYPE
+]
+
+DEFAULT_OUTPUT_FILE_NAME = "plot.eps"
+DEFAULT_HORIZONTAL_AXIS_LABEL = 'x'
+DEFAULT_VERTICAL_AXIS_LABEL = 'y'
+DEFAULT_TITLE = ""
+DEFAULT_KEY_POSITION = "right top"
+DEFAULT_TERMINAL = "postscript eps enhanced color"
+DEFAULT_STYLE = 2
+
+def add_line_to_plot(name, data, plot, style = DEFAULT_STYLE, data_type = ORDINAL_DATA_TYPE)
+  data.sort_by! { |d| d.x.to_f }
+  x = data.map { |d| d.x }
+  y = data.map { |d| d.y }
+  delta_y = data.map { |d| d.delta_y }
+
+  # Data points or bars
+  plot.data.push(
+    Gnuplot::DataSet.new(
+      [
+        x,
+        y,
+        delta_y
+      ]
+    ) do |ds|
+      ds.title = name
+      if data_type == CATEGORICAL_DATA_TYPE
+        ds.using =  '2:($2 - $3):($2 + $3):xticlabels(1)'
+      else
+        ds.with = "errorbars"
+      end
+
+      ds.ls = plot.style do |s|
+        s.lc = random_color
+        if data_type != CATEGORICAL_DATA_TYPE
+          s.lt = style
+          s.lw = 2
+          s.pt = style
+          s.ps = 1
+        end
+      end
+    end
+  )
+
+  if data_type != CATEGORICAL_DATA_TYPE
+    # Smooth line
+    plot.data.push(
+      Gnuplot::DataSet.new(
+        [
+          x,
+          y,
+          delta_y
+        ]
+      ) do |ds|
+        ds.using =  '1:2 smooth bezier notitle'
+
+        ds.ls = plot.data.last.ls
+      end
+    )
+  end
+
+  plot
+end
+
+def plot(
+  lines,
+  output_file_name = DEFAULT_OUTPUT_FILE_NAME,
+  horizontal_axis_label = DEFAULT_HORIZONTAL_AXIS_LABEL,
+  vertical_axis_label = DEFAULT_VERTICAL_AXIS_LABEL,
+  title = DEFAULT_TITLE,
+  key_position = DEFAULT_KEY_POSITION,
+  term = DEFAULT_TERMINAL,
+  data_type = DEFAULT_DATA_TYPE
+)
+  Gnuplot.open do |gp|
+    Gnuplot::Plot.new(gp) do |plot|
+      plot.term term
+      plot.output output_file_name
+      plot.xlabel horizontal_axis_label
+      plot.ylabel vertical_axis_label
+      plot.title title
+
+      if data_type == CATEGORICAL_DATA_TYPE
+        plot.unset 'key'
+        plot.set 'style data histogram'
+        plot.set 'xtics rotate out'
+        plot.set 'style histogram errorbars linewidth 1'
+        plot.set "style fill solid 0.2"
+        plot.set 'bars front'
+      else
+        plot.key key_position
+      end
+
+      style = DEFAULT_STYLE
+      lines.each do |name, data|
+        yield add_line_to_plot(name, data, plot, style, data_type) if block_given?
+
+        style += 1
+      end
+    end
+  end
+end
+
+require 'optparse'
+
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: <summary statistics table> | #{__FILE__} [options]"
+
+  opts.on("-h", "--help", "Show this message") do
+    puts opts
+    exit
+  end
+
+  options[:output_file] = DEFAULT_OUTPUT_FILE_NAME
+  opts.on(
+    "-o",
+    "--output-file [file path]",
+    "File to which resulting plot should be printed. Defaults to \"#{options[:output_file]}\""
+  ) do |f|
+    options[:output_file] = f if f
+  end
+
+  options[:horizontal_axis_label] = DEFAULT_HORIZONTAL_AXIS_LABEL
+  opts.on(
+    "-x",
+    "--horizontal-axis-label [string]",
+    "Horizontal axis label. Defaults to \"#{options[:horizontal_axis_label]}\""
+  ) do |x|
+    options[:horizontal_axis_label] = x if x
+  end
+
+  options[:vertical_axis_label] = DEFAULT_VERTICAL_AXIS_LABEL
+  opts.on(
+    "-y",
+    "--vertical-axis-label [string]",
+    "Vertical axis label. Defaults to \"#{options[:vertical_axis_label]}\""
+  ) do |y|
+    options[:vertical_axis_label] = y if y
+  end
+
+  options[:title] = DEFAULT_TITLE
+  opts.on(
+    "-t",
+    "--title [string]",
+    "Plot title. Defaults to \"#{options[:title]}\""
+  ) do |t|
+    options[:title] = t if t
+  end
+
+  options[:key_position] = DEFAULT_KEY_POSITION
+  opts.on(
+    "-k",
+    "--key-position [gnuplot key string]",
+    "Key/legend position. Defaults to \"#{options[:key_position]}\""
+  ) do |k|
+    options[:key_position] = k if k
+  end
+
+  options[:terminal] = DEFAULT_TERMINAL
+  opts.on(
+    "-e",
+    "--terminal [gnuplot terminal string]",
+    "Terminal on which to draw plot. Defaults to \"#{options[:terminal]}\""
+  ) do |e|
+    options[:terminal] = e if e
+  end
+
+  options[:data_type] = DEFAULT_DATA_TYPE
+  opts.on(
+    "-d",
+    "--data-type [statistical data type]",
+    "Horizontal axis data type (one of #{DATA_TYPE_OPTIONS}). Defaults to \"#{options[:data_type]}\""
+  ) do |d|
+    options[:data_type] = d if d
+  end
+end.parse!
+
+plot(
+  parse_plot_data,
+  options[:output_file],
+  options[:horizontal_axis_label],
+  options[:vertical_axis_label],
+  options[:title],
+  options[:key_position],
+  options[:terminal],
+  options[:data_type]
+)
