@@ -184,7 +184,8 @@ def plot(
 
       style = DEFAULT_STYLE
       lines.each do |name, data|
-        yield add_line_to_plot(name, data, plot, style, data_type) if block_given?
+        my_plot = add_line_to_plot(name, data, plot, style, data_type)
+        yield my_plot if block_given?
 
         style += 1
       end
