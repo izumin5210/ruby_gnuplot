@@ -43,7 +43,7 @@ using IntegerRefinement
 
 def random_color
   @r ||= Random.new(111)
-  "rgb \"##{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}#{@r.rand(12).round.abs.to_hex}\""
+  "rgb \"##{@r.rand(13).round.abs.to_hex}#{@r.rand(13).round.abs.to_hex}#{@r.rand(13).round.abs.to_hex}#{@r.rand(13).round.abs.to_hex}#{@r.rand(13).round.abs.to_hex}#{@r.rand(13).round.abs.to_hex}\""
 end
 
 def for_every_line_of_input
@@ -97,9 +97,12 @@ DEFAULT_VERTICAL_AXIS_LABEL = 'y'
 DEFAULT_TITLE = ""
 DEFAULT_KEY_POSITION = "right top"
 DEFAULT_TERMINAL = "postscript eps enhanced color"
-DEFAULT_STYLE = 2
+DEFAULT_STYLE = 1
+DEFAULT_WIDTH = 2
+DEFAULT_DISPLAY_TYPE = "errorbars"
+DEFAULT_WITH_SMOOTH_LINE = true
 
-def add_line_to_plot(name, data, plot, style = DEFAULT_STYLE, data_type = ORDINAL_DATA_TYPE)
+def add_line_to_plot(name, data, plot, style, data_type, width, display_type, with_smooth_line)
   data.sort_by! { |d| d.x.to_f }
   x = data.map { |d| d.x }
   y = data.map { |d| d.y }
@@ -118,22 +121,22 @@ def add_line_to_plot(name, data, plot, style = DEFAULT_STYLE, data_type = ORDINA
       if data_type == CATEGORICAL_DATA_TYPE
         ds.using =  '2:($2 - $3):($2 + $3):xticlabels(1)'
       else
-        ds.with = "errorbars"
+        ds.with = display_type
       end
 
       ds.ls = plot.style do |s|
         s.lc = random_color
         if data_type != CATEGORICAL_DATA_TYPE
           s.lt = style
-          s.lw = 2
+          s.lw = width
           s.pt = style
-          s.ps = 1
+          s.ps = width - 1
         end
       end
     end
   )
 
-  if data_type != CATEGORICAL_DATA_TYPE
+  if data_type != CATEGORICAL_DATA_TYPE && with_smooth_line
     # Smooth line
     plot.data.push(
       Gnuplot::DataSet.new(
@@ -155,13 +158,16 @@ end
 
 def plot(
   lines,
-  output_file_name = DEFAULT_OUTPUT_FILE_NAME,
-  horizontal_axis_label = DEFAULT_HORIZONTAL_AXIS_LABEL,
-  vertical_axis_label = DEFAULT_VERTICAL_AXIS_LABEL,
-  title = DEFAULT_TITLE,
-  key_position = DEFAULT_KEY_POSITION,
-  term = DEFAULT_TERMINAL,
-  data_type = DEFAULT_DATA_TYPE
+  output_file_name,
+  horizontal_axis_label,
+  vertical_axis_label,
+  title,
+  key_position,
+  term,
+  data_type,
+  width,
+  display_type,
+  with_smooth_line
 )
   Gnuplot.open do |gp|
     Gnuplot::Plot.new(gp) do |plot|
@@ -184,10 +190,10 @@ def plot(
 
       style = DEFAULT_STYLE
       lines.each do |name, data|
-        my_plot = add_line_to_plot(name, data, plot, style, data_type)
+        my_plot = add_line_to_plot(name, data, plot, style, data_type, width, display_type, with_smooth_line)
         yield my_plot if block_given?
 
-        style += 1
+        style += 2
       end
     end
   end
@@ -266,6 +272,42 @@ OptionParser.new do |opts|
   ) do |d|
     options[:data_type] = d if d
   end
+
+  options[:width] = DEFAULT_WIDTH
+  opts.on(
+    "-w",
+    "--width [natural number]",
+    "Line width and point width + 1. Defaults to \"#{options[:width]}\""
+  ) do |w|
+    options[:width] = w if w
+  end
+
+  options[:width] = DEFAULT_WIDTH.to_i
+  opts.on(
+    "-w",
+    "--width [natural number]",
+    "Line width and point width + 1. Defaults to \"#{options[:width]}\""
+  ) do |w|
+    options[:width] = w.to_i if w && w.to_i
+  end
+
+  options[:display_type] = DEFAULT_DISPLAY_TYPE
+  opts.on(
+    "-p",
+    "--display-type [any keyword accepted by Gnuplot's with command]",
+    "The type of display medium for the data. Defaults to \"#{options[:display_type]}\""
+  ) do |p|
+    options[:display_type] = p if p
+  end
+
+  options[:with_smooth_line] = DEFAULT_WITH_SMOOTH_LINE
+  opts.on(
+    "-s",
+    "--[no-]smooth-line",
+    "Show a smooth interpolation of the data. Defaults to \"#{options[:with_smooth_line]}\""
+  ) do |s|
+    options[:with_smooth_line] = s unless s.nil?
+  end
 end.parse!
 
 plot(
@@ -276,5 +318,8 @@ plot(
   options[:title],
   options[:key_position],
   options[:terminal],
-  options[:data_type]
+  options[:data_type],
+  options[:width],
+  options[:display_type],
+  options[:with_smooth_line]
 )
