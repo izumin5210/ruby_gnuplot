@@ -101,6 +101,8 @@ DEFAULT_STYLE = 1
 DEFAULT_WIDTH = 2
 DEFAULT_DISPLAY_TYPE = "errorbars"
 DEFAULT_WITH_SMOOTH_LINE = true
+DEFAULT_LOGSCALE_X = false
+DEFAULT_LOGSCALE_Y = false
 
 def add_line_to_plot(name, data, plot, style, data_type, width, display_type, with_smooth_line)
   data.sort_by! { |d| d.x.to_f }
@@ -167,7 +169,9 @@ def plot(
   data_type,
   width,
   display_type,
-  with_smooth_line
+  with_smooth_line,
+  logscale_x,
+  logscale_y
 )
   Gnuplot.open do |gp|
     Gnuplot::Plot.new(gp) do |plot|
@@ -186,6 +190,16 @@ def plot(
         plot.set 'bars front'
       else
         plot.key key_position
+
+        if logscale_x
+          if logscale_y
+            plot.set 'logscale xy'
+          else
+            plot.set 'logscale x'
+          end
+        elsif logscale_y
+          plot.set 'logscale y'
+        end
       end
 
       style = DEFAULT_STYLE
@@ -308,6 +322,22 @@ OptionParser.new do |opts|
   ) do |s|
     options[:with_smooth_line] = s unless s.nil?
   end
+
+  options[:logscale_x] = DEFAULT_LOGSCALE_X
+  opts.on(
+    "--[no-]logscale-x",
+    "Show x as log scale. Defaults to \"#{options[:logscale_x]}\""
+  ) do |s|
+    options[:logscale_x] = s unless s.nil?
+  end
+
+  options[:logscale_y] = DEFAULT_LOGSCALE_Y
+  opts.on(
+    "--[no-]logscale-y",
+    "Show y as log scale. Defaults to \"#{options[:logscale_y]}\""
+  ) do |s|
+    options[:logscale_y] = s unless s.nil?
+  end
 end.parse!
 
 plot(
@@ -321,5 +351,7 @@ plot(
   options[:data_type],
   options[:width],
   options[:display_type],
-  options[:with_smooth_line]
+  options[:with_smooth_line],
+  options[:logscale_x],
+  options[:logscale_y]
 )
