@@ -70,9 +70,10 @@ end
 
 PlotData = Struct.new(:x, :y, :delta_y)
 
-def parse_plot_data
+def parse_plot_data(data_to_show=nil)
   lines = {}
   for_every_ssv_entry do |line_name, ssv_entry|
+    next unless data_to_show.nil? || data_to_show.include?(line_name)
     lines[line_name] ||= []
 
     lines[line_name] << PlotData.new(*ssv_entry)
@@ -338,10 +339,20 @@ OptionParser.new do |opts|
   ) do |s|
     options[:logscale_y] = s unless s.nil?
   end
+
+  options[:data_to_show] = nil
+  opts.on(
+    "-n",
+    "--data-names d1,d2,d3",
+    Array,
+    "Names of the data to show. If left unspecified, all data will be shown."
+  ) do |d|
+    options[:data_to_show] = d
+  end
 end.parse!
 
 plot(
-  parse_plot_data,
+  parse_plot_data(options[:data_to_show]),
   options[:output_file],
   options[:horizontal_axis_label],
   options[:vertical_axis_label],
