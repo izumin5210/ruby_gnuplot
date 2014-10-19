@@ -215,7 +215,12 @@ def plot(
 end
 
 require 'optparse'
+require 'csv'
 
+csv_splitter = Object.new
+OptionParser.accept csv_splitter do |s,|
+  CSV.parse(s)[0]
+end
 options = {}
 OptionParser.new do |opts|
   opts.banner = "Usage: <summary statistics table> | #{__FILE__} [options]"
@@ -344,7 +349,7 @@ OptionParser.new do |opts|
   opts.on(
     "-n",
     "--data-names d1,d2,d3",
-    Array,
+    csv_splitter,
     "Names of the data to show. If left unspecified, all data will be shown."
   ) do |d|
     options[:data_to_show] = d
