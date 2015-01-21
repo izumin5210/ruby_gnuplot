@@ -150,7 +150,7 @@ module Gnuplot
 
     class Style
       attr_accessor :linestyle, :linetype, :linewidth, :linecolor,
-        :pointtype, :pointsize, :fill, :index
+        :pointtype, :pointsize, :fill, :index, :dashtype
 
       alias :ls :linestyle
       alias :lt :linetype
@@ -159,6 +159,7 @@ module Gnuplot
       alias :pt :pointtype
       alias :ps :pointsize
       alias :fs :fill
+      alias :dt :dashtype
 
       alias :ls= :linestyle=
       alias :lt= :linetype=
@@ -167,8 +168,9 @@ module Gnuplot
       alias :pt= :pointtype=
       alias :ps= :pointsize=
       alias :fs= :fill=
+      alias :dt= :dashtype=
 
-      STYLES = [:ls, :lt, :lw, :lc, :pt, :ps, :fs]
+      STYLES = [:ls, :lt, :lw, :lc, :pt, :ps, :fs, :dt]
 
       def Style.increment_index
         @index ||= 0
